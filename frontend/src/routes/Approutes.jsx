@@ -1,27 +1,33 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-
-import AuthLayout from "../layout/AuthLayout.jsx";
-
-import Home from "../pages/Home.jsx";
-import Login from "../pages/Login.jsx";
-import Register from "../pages/Register.jsx";
+import AuthLayout from "../layout/AuthLayout";
+import Register from "../pages/RegisterPage";
+import Login from "../pages/LoginPage";
 
 
-export default function AppRoutes() {
-  return (
+import Doctor from "../pages/doctor/Doctor";
+import Admin from "../pages/admin/Admin";
+import User from "../pages/user/User";
+
+import LandingPage from "../pages/LandingPage";
+export default function Approutes(){
+  return(
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route
+    <Route path="/" element={<LandingPage/>}>
+    </Route>
+<Route
         path="/auth"
         element={
             <AuthLayout />
         }
       >
-        <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
+        <Route path="login" element={<Login />} />
       </Route>
+
+        <Route path="/user" element={<User />} />
+        <Route path="/admin" element={<Admin />} />
+        <Route path="/doctor" element={<Doctor />} />
     </Routes>
-  );
+
+  )
 }
-
-
