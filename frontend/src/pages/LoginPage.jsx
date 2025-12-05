@@ -48,8 +48,8 @@ export default function Login() {
       setError('Password is required');
       return false;
     }
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (formData.password.length < 4) {
+      setError('Password must be at least  5 characters');
       return false;
     }
     return true;
