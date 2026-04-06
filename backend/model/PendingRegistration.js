@@ -1,8 +1,7 @@
-// models/User.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('./../viable/db.js');
 
-const User = sequelize.define('User', {
+const PendingRegistration = sequelize.define('PendingRegistration', {
   fullName: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -20,23 +19,6 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  emailVerified: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
-  },
-  emailVerificationOtpHash: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  emailVerificationOtpExpiresAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  emailVerificationOtpSentAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
   address: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -50,25 +32,41 @@ const User = sequelize.define('User', {
     allowNull: true,
   },
   role: {
-    type: DataTypes.ENUM('user', 'doctor','admin'),
+    type: DataTypes.ENUM('user', 'doctor'),
     defaultValue: 'user',
     allowNull: false,
   },
-  passwordResetOtpHash: {
+  otpHash: {
     type: DataTypes.STRING,
-    allowNull: true,
+    allowNull: false,
   },
-  passwordResetOtpExpiresAt: {
+  otpExpiresAt: {
     type: DataTypes.DATE,
-    allowNull: true,
+    allowNull: false,
   },
-  passwordResetOtpSentAt: {
+  otpSentAt: {
     type: DataTypes.DATE,
-    allowNull: true,
+    allowNull: false,
+  },
+  verificationToken: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
   },
 }, {
   timestamps: true,
-  tableName: 'users',
+  tableName: 'pending_registrations',
+  indexes: [
+    {
+      fields: ['email'],
+    },
+    {
+      fields: ['verificationToken'],
+    },
+    {
+      fields: ['otpExpiresAt'],
+    },
+  ],
 });
 
-module.exports = User;
+module.exports = PendingRegistration;

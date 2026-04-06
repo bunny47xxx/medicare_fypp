@@ -9,6 +9,7 @@ import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
 
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom'; // import navigation hook
+import { toast, ToastContainer } from 'react-toastify';
 
 export default function Login() {
   const navigate = useNavigate()
@@ -22,6 +23,15 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState('');
+  const [showResetForm, setShowResetForm] = useState(false);
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Handle input changes
   const handleInputChange = (e) => {
@@ -57,6 +67,7 @@ export default function Login() {
 
   // Handle form submission
   const handleSubmit = async (e) => {
+
     e.preventDefault();
 
     if (!validateForm()) return;
@@ -64,144 +75,390 @@ export default function Login() {
     setIsLoading(true);
     setError('');
 
-try {
+    try {
       const response = await axios.post('http://localhost:5000/api/users/login', formData);
-      alert('Login successful');
+      // alert('Login successful');
       const { token, user } = response.data;
 
       // Store token securely (e.g. localStorage)
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       if (user.role === 'admin') {
-        navigate('/admin');
+
+        navigate('/admin'),
+          toast.success("Admin Login successfull!");
       } else if (user.role === 'doctor') {
+        toast.success("Doctor Login successfully!");
         navigate('/doctor');
       } else {
+        toast.success("Login successfull!");
         navigate('/user');
       }
     } catch (error) {
-      alert('Login failed: ' + (error.response?.data?.error || 'Server error'));
+      setError(error.response?.data?.error || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle forgot password
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    
+    if (!forgotPasswordEmail) {
+      setForgotPasswordMessage('Please enter your email address');
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(forgotPasswordEmail)) {
+      setForgotPasswordMessage('Please enter a valid email address');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordMessage('');
+
+    try {
+      await axios.post('http://localhost:5000/api/users/forgot-password', {
+        email: forgotPasswordEmail
+      });
+      
+      setForgotPasswordMessage('✅ Password reset code has been sent to your email.');
+      setShowResetForm(true);
+    } catch (error) {
+      setForgotPasswordMessage(error.response?.data?.error || 'Failed to send reset code. Please try again.');
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  // Handle password reset with OTP
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+
+    if (!resetOtp) {
+      setForgotPasswordMessage('Please enter the OTP code');
+      return;
+    }
+
+    if (!newPassword) {
+      setForgotPasswordMessage('Please enter a new password');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setForgotPasswordMessage('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setForgotPasswordMessage('Passwords do not match');
+      return;
+    }
+
+    setResetLoading(true);
+    setForgotPasswordMessage('');
+
+    try {
+      await axios.post('http://localhost:5000/api/users/reset-password', {
+        email: forgotPasswordEmail,
+        otp: resetOtp,
+        newPassword: newPassword
+      });
+
+      setForgotPasswordMessage('✅ Password reset successful! You can now login with your new password.');
+      
+      setTimeout(() => {
+        setShowForgotPassword(false);
+        setShowResetForm(false);
+        setForgotPasswordEmail('');
+        setResetOtp('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setForgotPasswordMessage('');
+      }, 2000);
+    } catch (error) {
+      setForgotPasswordMessage(error.response?.data?.error || 'Failed to reset password. Please try again.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
   return (
-      <Card className="w-full max-w-md shadow-xl bg-white/80 backdrop-blur-sm">
-        <CardHeader className="space-y-1 text-center">
-          <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
-              <svg
-                className="w-7 h-7 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                />
-              </svg>
-            </div>
-          </div>
-          <CardTitle className="text-3xl font-bold text-gray-900">
-            Welcome Back
-          </CardTitle>
-          <CardDescription className="text-gray-600">
-            Sign in to your account to continue
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Error Alert */}
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {/* Email Field */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Enter your email address"
-                value={formData.email}
-                onChange={handleInputChange}
-                disabled={isLoading}
-                className="focus:ring-cyan-500 focus:border-cyan-500"
-                autoComplete="email"
-              />
-            </div>
-
-            {/* Password Field */}
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  disabled={isLoading}
-                  className="focus:ring-cyan-500 focus:border-cyan-500 pr-10"
-                  autoComplete="current-password"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-3 text-lg font-semibold mt-6"
-              disabled={isLoading}
+    <Card className="w-full max-w-md shadow-xl bg-white/80 backdrop-blur-sm">
+      <CardHeader className="space-y-1 text-center">
+        <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
+            <svg
+              className="w-7 h-7 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing In...
-                </>
-              ) : (
-                <>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Sign In
-                </>
-              )}
-            </Button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+              />
+            </svg>
+          </div>
+        </div>
+        <CardTitle className="text-3xl font-bold text-gray-900">
+          Welcome Back
+        </CardTitle>
+        <CardDescription className="text-gray-600">
+          Sign in to your account to continue
+        </CardDescription>
+      </CardHeader>
 
-            {/* Register Link */}
-            <div className="text-center text-sm pt-4">
-              <span className="text-gray-600">Don't have an account yet? </span>
+      <CardContent className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Error Alert */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Email Field */}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="Enter your email address"
+              value={formData.email}
+              onChange={handleInputChange}
+              disabled={isLoading}
+              className="focus:ring-cyan-500 focus:border-cyan-500"
+              autoComplete="email"
+            />
+          </div>
+
+          {/* Password Field */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
               <button
                 type="button"
-                onClick={() => window.location.href = '/auth/register'}
-                className="text-cyan-600 hover:text-cyan-500 font-medium underline-offset-4 hover:underline"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-cyan-600 hover:text-cyan-500 font-medium"
               >
-                Sign up
+                Forgot Password?
               </button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+            <div className="relative">
+              <Input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={handleInputChange}
+                disabled={isLoading}
+                className="focus:ring-cyan-500 focus:border-cyan-500 pr-10"
+                autoComplete="current-password"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={isLoading}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            className="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-3 text-lg font-semibold mt-6"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing In...
+              </>
+            ) : (
+              <>
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign In
+              </>
+            )}
+          </Button>
+          {/* Register Link */}
+          <div className="text-center text-sm pt-4">
+            <span className="text-gray-600">Don't have an account yet? </span>
+            <button
+              type="button"
+              onClick={() => window.location.href = '/auth/register'}
+              className="text-cyan-600 hover:text-cyan-500 font-medium underline-offset-4 hover:underline"
+            >
+              Sign up
+            </button>
+          </div>
+        </form>
+
+        {/* Forgot Password Modal */}
+        {showForgotPassword && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Reset Password</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                {!showResetForm 
+                  ? 'Enter your email address and we\'ll send you a code to reset your password.'
+                  : `Enter the 6-digit code sent to ${forgotPasswordEmail}`
+                }
+              </p>
+              
+              {!showResetForm ? (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  {forgotPasswordMessage && (
+                    <Alert variant={forgotPasswordMessage.includes('✅') ? 'default' : 'destructive'}>
+                      <AlertDescription>{forgotPasswordMessage}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">Email Address</Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={forgotPasswordEmail}
+                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      disabled={forgotPasswordLoading}
+                      className="focus:ring-cyan-500 focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowForgotPassword(false);
+                        setForgotPasswordEmail('');
+                        setForgotPasswordMessage('');
+                      }}
+                      disabled={forgotPasswordLoading}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="flex-1 bg-cyan-600 hover:bg-cyan-700"
+                      disabled={forgotPasswordLoading}
+                    >
+                      {forgotPasswordLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        'Send Code'
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  {forgotPasswordMessage && (
+                    <Alert variant={forgotPasswordMessage.includes('✅') ? 'default' : 'destructive'}>
+                      <AlertDescription>{forgotPasswordMessage}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-otp">Verification Code</Label>
+                    <Input
+                      id="reset-otp"
+                      type="text"
+                      placeholder="Enter 6-digit code"
+                      value={resetOtp}
+                      onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      disabled={resetLoading}
+                      className="focus:ring-cyan-500 focus:border-cyan-500 text-center text-2xl tracking-widest"
+                      maxLength={6}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      placeholder="Enter new password (min 8 characters)"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={resetLoading}
+                      className="focus:ring-cyan-500 focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-new-password">Confirm Password</Label>
+                    <Input
+                      id="confirm-new-password"
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      disabled={resetLoading}
+                      className="focus:ring-cyan-500 focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowResetForm(false);
+                        setResetOtp('');
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                        setForgotPasswordMessage('');
+                      }}
+                      disabled={resetLoading}
+                      className="flex-1"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="flex-1 bg-cyan-600 hover:bg-cyan-700"
+                      disabled={resetLoading}
+                    >
+                      {resetLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Resetting...
+                        </>
+                      ) : (
+                        'Reset Password'
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
+      </CardContent>
+    </Card>
   );
 }

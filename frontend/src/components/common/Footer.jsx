@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    setIsLoggedIn(Boolean(token && userData));
+  }, []);
 
   const handleSendEmail = () => {
     if (email) {
@@ -58,38 +65,42 @@ export default function Footer() {
                   Home
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={() => handleNavigation('/')}
-                  className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
-                >
-                  About Us
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleNavigation('/')}
-                  className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
-                >
-                  Services
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleNavigation('/')}
-                  className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
-                >
-                  Doctors
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleNavigation('/')}
-                  className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
-                >
-                  Contact
-                </button>
-              </li>
+              {!isLoggedIn && (
+                <>
+                  <li>
+                    <button
+                      onClick={() => handleNavigation('/about')}
+                      className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
+                    >
+                      About Us
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handleNavigation('/services')}
+                      className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
+                    >
+                      Services
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handleNavigation('/')}
+                      className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
+                    >
+                      Doctors
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => handleNavigation('/contact')}
+                      className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
+                    >
+                      Contact
+                    </button>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
 

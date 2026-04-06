@@ -3,6 +3,9 @@ const app = require('./app');
 const { testConnection, sequelize } = require('./viable/db');
 require("dotenv").config();
 
+// Ensure all models + associations are registered before sync
+require('./model/associations');
+
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
@@ -10,11 +13,8 @@ const startServer = async () => {
     // Test database connection
     await testConnection();
     
-    // Sync database models
-    await sequelize.sync({ 
-      force: false, // Set to true only in development to reset tables
-      alter: false  // Set to true to update existing tables
-    });
+    // Sync database models (alter: false — all schema changes via migration scripts)
+    await sequelize.sync({ force: false, alter: false });
     console.log('✅ Database models synchronized');
     
     // Start server

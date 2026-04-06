@@ -1,9 +1,62 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { User as UserIcon, LogOut, Settings, ChevronDown } from 'lucide-react';
 
 export default function Header() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        setIsLoggedIn(true);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
+
   const handleNavigation = (path) => {
     window.location.href = path;
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
+    setUser(null);
+    setShowUserMenu(false);
+    handleNavigation('/');
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getRolePath = (role) => {
+    switch (role) {
+      case 'admin':
+        return '/admin';
+      case 'doctor':
+        return '/doctor';
+      default:
+        return '/user';
+    }
   };
 
   return (
@@ -36,47 +89,145 @@ export default function Header() {
 
           {/* Navigation Links */}
           <nav className="hidden md:flex items-center space-x-8">
-            <button
-              onClick={() => handleNavigation('/')}
-              className="text-gray-700 hover:text-cyan-600 font-medium transition-colors"
-            >
-              Services
-            </button>
-            <button
-              onClick={() => handleNavigation('/')}
-              className="text-gray-700 hover:text-cyan-600 font-medium transition-colors"
-            >
-              Doctors
-            </button>
-            <button
-              onClick={() => handleNavigation('/')}
-              className="text-gray-700 hover:text-cyan-600 font-medium transition-colors"
-            >
-              About
-            </button>
-            <button
-              onClick={() => handleNavigation('/')}
-              className="text-gray-700 hover:text-cyan-600 font-medium transition-colors"
-            >
-              Contact
-            </button>
+            {!isLoggedIn && (
+              <>
+                <button
+                  onClick={() => handleNavigation('/services')}
+                  className={`font-medium transition-colors ${
+                    window.location.pathname === '/services'
+                      ? 'text-cyan-600 border-b-2 border-cyan-600 pb-1'
+                      : 'text-gray-700 hover:text-cyan-600'
+                  }`}
+                >
+                  Services
+                </button>
+                <button
+                  onClick={() => handleNavigation('/')}
+                  className="text-gray-700 hover:text-cyan-600 font-medium transition-colors"
+                >
+                  Doctors
+                </button>
+                <button
+                  onClick={() => handleNavigation('/about')}
+                  className={`font-medium transition-colors ${
+                    window.location.pathname === '/about'
+                      ? 'text-cyan-600 border-b-2 border-cyan-600 pb-1'
+                      : 'text-gray-700 hover:text-cyan-600'
+                  }`}
+                >
+                  About
+                </button>
+                <button
+                  onClick={() => handleNavigation('/contact')}
+                  className={`font-medium transition-colors ${
+                    window.location.pathname === '/contact'
+                      ? 'text-cyan-600 border-b-2 border-cyan-600 pb-1'
+                      : 'text-gray-700 hover:text-cyan-600'
+                  }`}
+                >
+                  Contact
+                </button>
+              </>
+            )}
+            {isLoggedIn && (
+              <button
+                onClick={() => handleNavigation(getRolePath(user?.role))}
+                className={`font-medium transition-colors ${
+                  window.location.pathname === getRolePath(user?.role)
+                    ? 'text-cyan-600 border-b-2 border-cyan-600 pb-1'
+                    : 'text-gray-700 hover:text-cyan-600'
+                }`}
+              >
+                Dashboard
+              </button>
+            )}
           </nav>
 
-          {/* Auth Buttons */}
+          {/* Auth Buttons or User Menu */}
           <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              onClick={() => handleNavigation('/auth/login')}
-              className="text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50"
-            >
-              Sign In
-            </Button>
-            <Button
-              onClick={() => handleNavigation('/auth/register')}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white shadow-md"
-            >
-              Register
-            </Button>
+            {isLoggedIn ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-cyan-50 transition-colors border border-cyan-200 bg-cyan-50"
+                >
+                  <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                    {getInitials(user?.fullName)}
+                  </div>
+                  <div className="hidden md:block text-left">
+                    <p className="text-sm font-semibold text-[#344256]">
+                      {user?.fullName || 'User'}
+                    </p>
+                    <p className="text-xs text-gray-600 capitalize">
+                      {user?.role || 'user'}
+                    </p>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-gray-600 hidden md:block" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showUserMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowUserMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="px-4 py-3 border-b border-gray-200">
+                        <p className="text-sm font-semibold text-[#344256]">
+                          {user?.fullName || 'User'}
+                        </p>
+                        <p className="text-xs text-gray-600">{user?.email}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          handleNavigation(getRolePath(user?.role));
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-cyan-50 transition-colors"
+                      >
+                        <UserIcon className="w-4 h-4" />
+                        <span>My Dashboard</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleNavigation('/profile');
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-cyan-50 transition-colors"
+                      >
+                        <Settings className="w-4 h-4" />
+                        <span>Settings</span>
+                      </button>
+                      <div className="border-t border-gray-200 my-1" />
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleNavigation('/auth/login')}
+                  className="text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50"
+                >
+                  Sign In
+                </Button>
+                <Button
+                  onClick={() => handleNavigation('/auth/register')}
+                  className="bg-cyan-600 hover:bg-cyan-700 text-white shadow-md"
+                >
+                  Register
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
