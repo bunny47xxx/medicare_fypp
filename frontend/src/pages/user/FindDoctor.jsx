@@ -100,6 +100,12 @@ export default function FindDoctor() {
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Page Header */}
         <div className="mb-8">
+          <button
+            onClick={() => navigate('/user')}
+            className="flex items-center gap-1 text-sm text-cyan-600 hover:text-cyan-800 mb-4 transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
           <h1 className="text-4xl font-bold text-[#344256] mb-2">Find a Doctor</h1>
           <p className="text-gray-600">Search and book appointments with qualified healthcare professionals</p>
         </div>
@@ -243,6 +249,14 @@ export default function FindDoctor() {
                       <span>{doctor.city}</span>
                     </div>
 
+                    {/* Consultation Fee */}
+                    {doctor.profile?.consultationFee && (
+                      <div className="flex items-center justify-between bg-cyan-50 rounded-lg px-3 py-2">
+                        <span className="text-sm text-gray-600">Consultation Fee</span>
+                        <span className="font-bold text-cyan-700">NPR {parseFloat(doctor.profile.consultationFee).toLocaleString()}</span>
+                      </div>
+                    )}
+
                     {/* Actions */}
                     <div className="flex space-x-2 pt-2 border-t">
                       <Button
@@ -334,6 +348,12 @@ export default function FindDoctor() {
                     </div>
                     <CheckCircle className="w-8 h-8 text-green-600" />
                   </div>
+                  {selectedDoctor.profile?.consultationFee && (
+                    <div className="mt-3 pt-3 border-t border-green-200 flex items-center justify-between">
+                      <span className="text-sm text-green-800 font-medium">Consultation Fee</span>
+                      <span className="text-lg font-bold text-cyan-700">NPR {parseFloat(selectedDoctor.profile.consultationFee).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -44,14 +44,6 @@ export default function LandingPage(){
                 <Calendar className="w-5 h-5 mr-2" />
                 Book Appointment
               </Button>
-              <Button
-                onClick={() => handleNavigation('/')}
-                variant="outline"
-                className="border-2 border-cyan-600 text-cyan-700 hover:bg-cyan-50 px-8 py-6 text-lg shadow-md"
-              >
-                <MessageCircle className="w-5 h-5 mr-2" />
-                Quick Chat
-              </Button>
             </div>
 
             {/* Stats Cards */}

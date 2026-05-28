@@ -35,8 +35,143 @@ import {
   DollarSign,
   TrendingUp,
   CreditCard,
+  EyeOff,
+  Activity,
 } from 'lucide-react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Inline component — doctor views patient lab reports
+function LabReportsSection({ patientId, appointmentId, compact = false }) {
+  const [reports, setReports] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetch = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const params = appointmentId ? `?appointmentId=${appointmentId}` : '';
+        const res = await axios.get(`${API_BASE_URL}/lab-reports/patient/${patientId}${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setReports(res.data.reports || []);
+      } catch (e) {
+        console.error('Failed to load lab reports:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetch();
+  }, [patientId, appointmentId]);
+
+  if (loading) return null;
+
+  if (compact) {
+    if (reports.length === 0) return null; // hide if no reports for this appointment
+    return (
+      <div>
+        <p className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+          <Activity className="w-3 h-3" /> Patient Lab Reports ({reports.length})
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {reports.map(r => (
+            <a
+              key={r.id}
+              href={`${API_BASE_URL}/lab-reports/file/${r.filePath}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100"
+            >
+              <FileText className="w-3 h-3" />
+              {r.title}
+              <span className="text-gray-400">· {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (reports.length === 0) return (
+    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Patient Lab Reports</p>
+      <p className="text-sm text-gray-400">No lab reports uploaded by patient yet.</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">
+        Patient Lab Reports ({reports.length})
+      </p>
+      <div className="space-y-2">
+        {reports.map(r => (
+          <div key={r.id} className="bg-white border border-green-100 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#344256] truncate">{r.title}</p>
+              {r.description && <p className="text-xs text-gray-500 truncate">{r.description}</p>}
+              <p className="text-xs text-gray-400 mt-0.5">
+                {r.fileName} · {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+            </div>
+            <a
+              href={`${API_BASE_URL}/lab-reports/file/${r.filePath}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-shrink-0 text-xs bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-200 flex items-center gap-1"
+            >
+              <Eye className="w-3 h-3" /> View
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Button that shows lab reports inline when clicked
+function LabReportButton({ patientId, appointmentId }) {
+  const [open, setOpen] = React.useState(false);
+  const [reports, setReports] = React.useState([]);
+  const [loaded, setLoaded] = React.useState(false);
+
+  const load = async () => {
+    if (loaded) { setOpen(v => !v); return; }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(
+        `${API_BASE_URL}/lab-reports/patient/${patientId}?appointmentId=${appointmentId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setReports(res.data.reports || []);
+      setLoaded(true);
+      setOpen(true);
+    } catch (e) { console.error(e); }
+  };
+
+  if (loaded && reports.length === 0) return null;
+
+  return (
+    <div className="inline-flex flex-col gap-1">
+      <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700 border-green-300" onClick={load}>
+        <Activity className="w-4 h-4 mr-1" />
+        Lab Reports {loaded && reports.length > 0 ? `(${reports.length})` : ''}
+      </Button>
+      {open && reports.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {reports.map(r => (
+            <a key={r.id} href={`${API_BASE_URL}/lab-reports/file/${r.filePath}`} target="_blank" rel="noreferrer"
+              className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-lg hover:bg-green-100 flex items-center gap-1">
+              <FileText className="w-3 h-3" /> {r.title}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Doctor() {
   const [activeTab, setActiveTab] = useState('appointments');
@@ -100,6 +235,8 @@ export default function Doctor() {
   const [newCert, setNewCert] = useState({ name: '', issuedBy: '', year: '' });
   const [newSpec, setNewSpec] = useState('');
   const [earnings, setEarnings] = useState(null);
+  const [showEarnings, setShowEarnings] = useState(false);
+  const [showEarningsContent, setShowEarningsContent] = useState(true);
 
   const API_BASE = 'http://localhost:5000/api';
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -113,6 +250,7 @@ export default function Doctor() {
         fetchAppointments(parsedUser.id);
         loadNotifications(parsedUser.id);
         fetchDoctorProfile(); // always load profile for dashboard card
+        fetchEarnings();      // always load earnings for dashboard card
         if (activeTab === 'schedule') {
           fetchSchedule(parsedUser.id);
         }
@@ -148,9 +286,6 @@ export default function Doctor() {
     }
     if (doctor && activeTab === 'profile') {
       fetchDoctorProfile();
-    }
-    if (doctor && activeTab === 'earnings') {
-      fetchEarnings();
     }
   }, [activeTab, doctor]);
 
@@ -224,10 +359,10 @@ export default function Doctor() {
         experience: profileForm.experience ? parseInt(profileForm.experience) : null,
         consultationFee: profileForm.consultationFee ? parseFloat(profileForm.consultationFee) : null,
       }, { headers: { Authorization: `Bearer ${token}` } });
-      alert('Profile saved successfully!');
+      toast.success('Profile saved successfully!');
       fetchDoctorProfile();
     } catch (err) {
-      alert('Failed to save profile: ' + (err.response?.data?.error || 'Server error'));
+      toast.error('Failed to save profile: ' + (err.response?.data?.error || 'Server error'));
     } finally {
       setProfileSaving(false);
     }
@@ -236,23 +371,22 @@ export default function Doctor() {
   const handleSubmitVerification = async () => {
     const { percent } = computeProfileCompletion(profileForm);
     if (percent < 100) {
-      alert('Please complete your profile (100%) before requesting verification.');
+      toast.warn('Please complete your profile (100%) before requesting verification.');
       return;
     }
     if (!profileForm.nmcNo) {
-      alert('Please add your NMC No. before submitting for verification.');
+      toast.warn('Please add your NMC No. before submitting for verification.');
       return;
     }
-    if (!confirm('Submit your profile for admin verification?')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.post(`${API_BASE}/doctor/profile/verify`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert('Verification request submitted! Admin will review your profile.');
+      toast.success('Verification request submitted! Admin will review your profile.');
       fetchDoctorProfile();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to submit verification');
+      toast.error(err.response?.data?.error || 'Failed to submit verification');
     }
   };
 
@@ -282,7 +416,7 @@ export default function Doctor() {
 
   const handleSaveSchedule = async () => {
     if (!scheduleForm.dayOfWeek || !scheduleForm.startTime || !scheduleForm.endTime) {
-      alert('Please fill in all required fields');
+      toast.warn('Please fill in all required fields');
       return;
     }
 
@@ -314,18 +448,16 @@ export default function Doctor() {
         localStorage.setItem(`doctor_schedule_${doctor.id}`, JSON.stringify(response.data.schedule));
       }
       
-      alert('Schedule saved successfully');
+      toast.success('Schedule saved successfully');
       setShowScheduleModal(false);
       setScheduleForm({ dayOfWeek: '', startTime: '', endTime: '', isAvailable: true, notes: '' });
     } catch (error) {
       console.error('API error:', error);
-      alert('Failed to save schedule: ' + (error.response?.data?.error || 'Server error'));
+      toast.error('Failed to save schedule: ' + (error.response?.data?.error || 'Server error'));
     }
   };
 
   const handleDeleteSchedule = async (scheduleId) => {
-    if (!confirm('Are you sure you want to delete this schedule?')) return;
-
     try {
       await axios.delete(`${API_BASE}/doctor/schedule/${scheduleId}`);
     } catch (error) {
@@ -335,7 +467,7 @@ export default function Doctor() {
     const updatedSchedule = schedule.filter(slot => slot.id !== scheduleId);
     setSchedule(updatedSchedule);
     localStorage.setItem(`doctor_schedule_${doctor.id}`, JSON.stringify(updatedSchedule));
-    alert('Schedule deleted successfully');
+    toast.success('Schedule deleted successfully');
   };
 
   const emptyNotesForm = {
@@ -389,7 +521,7 @@ export default function Doctor() {
     if (!selectedAppointment) return;
 
     if (!notesForm.diagnosis && !notesForm.chiefComplaint && !notesForm.symptoms) {
-      alert('Please fill in at least Chief Complaint or Diagnosis before saving');
+      toast.warn('Please fill in at least Chief Complaint or Diagnosis before saving');
       return;
     }
 
@@ -424,11 +556,11 @@ export default function Doctor() {
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );
 
-      alert('Consultation notes saved! Appointment marked as completed.');
+      toast.success('Consultation notes saved! Appointment marked as completed.');
       setShowNotesModal(false);
       if (doctor) fetchAppointments(doctor.id);
     } catch (error) {
-      alert('Failed to save notes: ' + (error.response?.data?.error || 'Server error'));
+      toast.error('Failed to save notes: ' + (error.response?.data?.error || 'Server error'));
     }
   };
 
@@ -444,32 +576,29 @@ export default function Doctor() {
         });
         
         if (!response.data || !response.data.note) {
-          alert('Please add consultation notes before marking the appointment as completed.');
+          toast.warn('Please add consultation notes before marking the appointment as completed.');
           return;
         }
       } catch (error) {
-        alert('Please add consultation notes before marking the appointment as completed.');
+        toast.warn('Please add consultation notes before marking the appointment as completed.');
         return;
       }
     }
 
-    if (!confirm(`Are you sure you want to change appointment status to ${status}?`)) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_BASE}/doctor/appointments/${appointmentId}/status`,
-        { status },
+      await toast.promise(
+        axios.put(
+          `${API_BASE}/doctor/appointments/${appointmentId}/status`,
+          { status },
+          { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        ),
         {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          pending: `Updating status to ${status}...`,
+          success: `Appointment ${status} successfully!`,
+          error: 'Failed to update appointment status',
         }
       );
-      alert('Appointment status updated successfully');
       
       // Add notification
       addNotification({
@@ -484,7 +613,7 @@ export default function Doctor() {
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      alert('Failed to update appointment status: ' + (error.response?.data?.error || 'Server error'));
+      toast.error('Failed to update appointment status: ' + (error.response?.data?.error || 'Server error'));
     }
   };
 
@@ -499,7 +628,7 @@ export default function Doctor() {
 
   const handleSaveReschedule = async () => {
     if (!rescheduleForm.newDate || !rescheduleForm.newTime) {
-      alert('Please select both date and time');
+      toast.warn('Please select both date and time');
       return;
     }
 
@@ -551,7 +680,7 @@ export default function Doctor() {
       });
     }
 
-    alert('Appointment rescheduled successfully');
+    toast.success('Appointment rescheduled successfully');
     setShowRescheduleModal(false);
     if (doctor) {
       fetchAppointments(doctor.id);
@@ -559,10 +688,6 @@ export default function Doctor() {
   };
 
   const handleCancelAppointment = async (appointmentId) => {
-    if (!confirm('Are you sure you want to cancel this appointment?')) {
-      return;
-    }
-
     try {
       await handleAppointmentStatusChange(appointmentId, 'cancelled');
     } catch (error) {
@@ -699,107 +824,155 @@ export default function Doctor() {
         )}
 
         {/* Profile Completion & Verification Status Card */}
-        {profileData && (() => {
+        {profileData && activeTab !== 'profile' && (() => {
           const { checks, done, total, percent } = computeProfileCompletion(profileForm);
           const status = profileData.profile?.verificationStatus || 'unsubmitted';
           const canRequest = percent === 100 && ['unsubmitted', 'rejected'].includes(status);
           const barColor = percent === 100 ? 'bg-green-500' : percent >= 60 ? 'bg-yellow-400' : 'bg-red-400';
 
           return (
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Profile Completion */}
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Left: Profile Completion + Verification combined */}
               <Card className="border-2 border-cyan-100">
-                <CardContent className="pt-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-semibold text-[#344256]">Profile Completion</p>
-                      <p className="text-xs text-gray-500">{done} of {total} fields filled</p>
+                <CardContent className="pt-5 space-y-4">
+                  {/* Profile Completion */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="font-semibold text-[#344256]">Profile Completion</p>
+                        <p className="text-xs text-gray-500">{done} of {total} fields filled</p>
+                      </div>
+                      <span className={`text-2xl font-bold ${percent === 100 ? 'text-green-600' : percent >= 60 ? 'text-yellow-600' : 'text-red-500'}`}>
+                        {percent}%
+                      </span>
                     </div>
-                    <span className={`text-2xl font-bold ${percent === 100 ? 'text-green-600' : percent >= 60 ? 'text-yellow-600' : 'text-red-500'}`}>
-                      {percent}%
-                    </span>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-3">
-                    <div className={`h-2.5 rounded-full transition-all ${barColor}`} style={{ width: `${percent}%` }} />
-                  </div>
-                  {/* Missing fields */}
-                  {percent < 100 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {checks.filter(c => !c.done).map(c => (
-                        <span key={c.label} className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-2 py-0.5">
-                          {c.label}
-                        </span>
-                      ))}
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                      <div className={`h-2.5 rounded-full transition-all ${barColor}`} style={{ width: `${percent}%` }} />
                     </div>
-                  )}
-                  {percent === 100 && (
-                    <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                      <CheckCircle className="w-3 h-3" /> Profile is complete
-                    </p>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3 text-cyan-600 border-cyan-300 hover:bg-cyan-50 w-full"
-                    onClick={() => setActiveTab('profile')}
-                  >
-                    {percent < 100 ? 'Complete Profile' : 'Edit Profile'} <ChevronRight className="w-3 h-3 ml-1" />
-                  </Button>
+                    {percent < 100 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {checks.filter(c => !c.done).map(c => (
+                          <span key={c.label} className="text-xs bg-red-50 text-red-600 border border-red-200 rounded px-2 py-0.5">{c.label}</span>
+                        ))}
+                      </div>
+                    )}
+                    {percent === 100 && (
+                      <p className="text-xs text-green-600 flex items-center gap-1 mb-2">
+                        <CheckCircle className="w-3 h-3" /> Profile is complete
+                      </p>
+                    )}
+                    <Button variant="outline" size="sm" className="text-cyan-600 border-cyan-300 hover:bg-cyan-50 w-full" onClick={() => setActiveTab('profile')}>
+                      {percent < 100 ? 'Complete Profile' : 'Edit Profile'} <ChevronRight className="w-3 h-3 ml-1" />
+                    </Button>
+                  </div>
+
+                  <div className="border-t border-gray-100" />
+
+                  {/* Verification Status */}
+                  <div>
+                    <p className="font-semibold text-[#344256] mb-1">Verification Status</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      {status === 'approved'    && <><ShieldCheck className="w-4 h-4 text-green-600" /><span className="text-green-700 font-semibold text-sm">Approved</span></>}
+                      {status === 'pending'     && <><ShieldAlert className="w-4 h-4 text-yellow-600" /><span className="text-yellow-700 font-semibold text-sm">Pending Review</span></>}
+                      {status === 'rejected'    && <><ShieldOff className="w-4 h-4 text-red-600" /><span className="text-red-700 font-semibold text-sm">Rejected</span></>}
+                      {status === 'unsubmitted' && <><AlertCircle className="w-4 h-4 text-gray-500" /><span className="text-gray-600 font-semibold text-sm">Not Submitted</span></>}
+                    </div>
+                    {status === 'approved'    && <p className="text-xs text-green-700">Verified by admin. Patients can book appointments with you.</p>}
+                    {status === 'pending'     && <p className="text-xs text-yellow-700">Under review. Admin will respond shortly.</p>}
+                    {status === 'rejected' && profileData.profile?.rejectionReason && <p className="text-xs text-red-700">Reason: {profileData.profile.rejectionReason}</p>}
+                    {status === 'unsubmitted' && <p className="text-xs text-gray-600">Complete your profile and request verification.</p>}
+                    {['unsubmitted', 'rejected'].includes(status) && (
+                      <div className="mt-2">
+                        {percent < 100 && <p className="text-xs text-red-500 mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Complete profile to 100% first</p>}
+                        <Button onClick={handleSubmitVerification} disabled={!canRequest} size="sm"
+                          className={`w-full ${canRequest ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-gray-300 cursor-not-allowed'}`}>
+                          <BadgeCheck className="w-4 h-4 mr-2" />
+                          {status === 'rejected' ? 'Re-submit Verification' : 'Request Verification'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
-              {/* Verification Status */}
-              <Card className={`border-2 ${
-                status === 'approved' ? 'border-green-200 bg-green-50' :
-                status === 'pending'  ? 'border-yellow-200 bg-yellow-50' :
-                status === 'rejected' ? 'border-red-200 bg-red-50' :
-                'border-gray-200'
-              }`}>
-                <CardContent className="pt-5">
-                  <div className="flex items-start justify-between mb-2">
+              {/* Right: Earnings Summary */}
+              <Card className="border-2 border-green-100 overflow-hidden py-0 gap-0">
+                <div className="bg-gradient-to-r from-[#344256] to-cyan-700 px-5 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-white" />
+                    </div>
                     <div>
-                      <p className="font-semibold text-[#344256]">Verification Status</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {status === 'approved' && <><ShieldCheck className="w-5 h-5 text-green-600" /><span className="text-green-700 font-semibold">Approved</span></>}
-                        {status === 'pending'  && <><ShieldAlert className="w-5 h-5 text-yellow-600" /><span className="text-yellow-700 font-semibold">Pending Review</span></>}
-                        {status === 'rejected' && <><ShieldOff className="w-5 h-5 text-red-600" /><span className="text-red-700 font-semibold">Rejected</span></>}
-                        {status === 'unsubmitted' && <><AlertCircle className="w-5 h-5 text-gray-500" /><span className="text-gray-600 font-semibold">Not Submitted</span></>}
-                      </div>
+                      <p className="text-white font-semibold text-sm">My Earnings</p>
+                      <p className="text-cyan-200 text-xs">Payments from patients</p>
                     </div>
                   </div>
-
-                  {status === 'approved' && (
-                    <p className="text-xs text-green-700 mt-1">Your profile has been verified by admin. Patients can book appointments with you.</p>
-                  )}
-                  {status === 'pending' && (
-                    <p className="text-xs text-yellow-700 mt-1">Your verification request is under review. Admin will respond shortly.</p>
-                  )}
-                  {status === 'rejected' && profileData.profile?.rejectionReason && (
-                    <p className="text-xs text-red-700 mt-1">Reason: {profileData.profile.rejectionReason}</p>
-                  )}
-                  {status === 'unsubmitted' && (
-                    <p className="text-xs text-gray-600 mt-1">Complete your profile and request verification to start accepting patients.</p>
-                  )}
-
-                  {['unsubmitted', 'rejected'].includes(status) && (
-                    <div className="mt-3">
-                      {percent < 100 && (
-                        <p className="text-xs text-red-500 mb-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" /> Complete your profile to {percent}% → 100% first
-                        </p>
-                      )}
-                      <Button
-                        onClick={handleSubmitVerification}
-                        disabled={!canRequest}
-                        size="sm"
-                        className={`w-full ${canRequest ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-gray-300 cursor-not-allowed'}`}
-                      >
-                        <BadgeCheck className="w-4 h-4 mr-2" />
-                        {status === 'rejected' ? 'Re-submit Verification' : 'Request Verification'}
-                      </Button>
+                  <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-7 w-7 p-0" onClick={() => setShowEarningsContent(v => !v)}>
+                    {showEarningsContent ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  </Button>
+                </div>
+                <CardContent className={showEarningsContent ? "pt-4" : "p-0"}>
+                  {showEarningsContent && (<>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="text-center p-3 bg-green-50 rounded-xl border border-green-100">
+                      <p className="text-xs text-green-700 font-medium mb-0.5">Total</p>
+                      <p className="text-lg font-bold text-green-700">NPR {earnings ? earnings.totalEarnings.toLocaleString() : '—'}</p>
+                    </div>
+                    <div className="text-center p-3 bg-cyan-50 rounded-xl border border-cyan-100">
+                      <p className="text-xs text-cyan-700 font-medium mb-0.5">Paid Apts</p>
+                      <p className="text-lg font-bold text-cyan-700">{earnings ? earnings.totalPaidAppointments : '—'}</p>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-xl border border-purple-100">
+                      <p className="text-xs text-purple-700 font-medium mb-0.5">Avg</p>
+                      <p className="text-lg font-bold text-purple-700">
+                        {earnings && earnings.totalPaidAppointments > 0
+                          ? `NPR ${Math.round(earnings.totalEarnings / earnings.totalPaidAppointments).toLocaleString()}`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  {earnings?.byMonth && Object.keys(earnings.byMonth).length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Monthly</p>
+                      <div className="space-y-1.5">
+                        {Object.entries(earnings.byMonth).slice(0, 3).map(([month, amount]) => {
+                          const max = Math.max(...Object.values(earnings.byMonth));
+                          const pct = Math.round((amount / max) * 100);
+                          return (
+                            <div key={month} className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-16 shrink-0">{month}</span>
+                              <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                                <div className="bg-gradient-to-r from-cyan-500 to-blue-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-xs font-semibold text-gray-700 w-20 text-right">NPR {amount.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
+                  {earnings?.payments?.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent</p>
+                      <div className="space-y-1.5">
+                        {earnings.payments.map(p => (
+                          <div key={p.id} className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded-lg">
+                            <div>
+                              <p className="text-xs font-medium text-[#344256]">{p.patientName}</p>
+                              <p className="text-xs text-gray-400">{p.appointmentDate}</p>
+                            </div>
+                            <span className="font-bold text-green-600 text-xs">NPR {p.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : earnings && (
+                    <div className="text-center py-4 text-gray-400">
+                      <CreditCard className="w-8 h-8 mx-auto mb-1 opacity-20" />
+                      <p className="text-xs">No payments yet</p>
+                    </div>
+                  )}
+                  </>)}
                 </CardContent>
               </Card>
             </div>
@@ -840,28 +1013,6 @@ export default function Doctor() {
           >
             <FileText className="inline-block w-5 h-5 mr-2" />
             Consultation Notes
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-6 py-3 font-semibold transition-colors ${
-              activeTab === 'profile'
-                ? 'border-b-2 border-cyan-600 text-cyan-600'
-                : 'text-gray-600 hover:text-cyan-600'
-            }`}
-          >
-            <BadgeCheck className="inline-block w-5 h-5 mr-2" />
-            My Profile
-          </button>
-          <button
-            onClick={() => setActiveTab('earnings')}
-            className={`px-6 py-3 font-semibold transition-colors ${
-              activeTab === 'earnings'
-                ? 'border-b-2 border-cyan-600 text-cyan-600'
-                : 'text-gray-600 hover:text-cyan-600'
-            }`}
-          >
-            <DollarSign className="inline-block w-5 h-5 mr-2" />
-            Earnings
           </button>
         </div>
 
@@ -934,7 +1085,7 @@ export default function Doctor() {
                       className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex-1">
+                      <div className="flex-1">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                               <div className="flex items-center space-x-2 mb-2">
@@ -972,68 +1123,108 @@ export default function Doctor() {
                               <p className="text-sm text-gray-700">{appointment.reason}</p>
                             </div>
                           )}
-                        </div>
-                        <div className="flex flex-col space-y-2 ml-4">
-                          <Button
-                            onClick={() => handleViewStatus(appointment)}
-                            variant="outline"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View Status
-                          </Button>
-                          {appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+                          {/* Action buttons below reason */}
+                          <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-gray-100">
                             <Button
-                              onClick={() => handleRescheduleAppointment(appointment)}
+                              onClick={() => handleViewStatus(appointment)}
                               variant="outline"
                               size="sm"
-                              className="text-purple-600 hover:text-purple-700"
+                              className="text-blue-600 hover:text-blue-700"
                             >
-                              <CalendarDays className="w-4 h-4 mr-1" />
-                              Reschedule
+                              <Eye className="w-4 h-4 mr-1" />
+                              View Status
                             </Button>
-                          )}
-                          {appointment.status !== 'cancelled' && (
+                            {appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+                              <Button
+                                onClick={() => handleRescheduleAppointment(appointment)}
+                                variant="outline"
+                                size="sm"
+                                className="text-purple-600 hover:text-purple-700"
+                              >
+                                <CalendarDays className="w-4 h-4 mr-1" />
+                                Reschedule
+                              </Button>
+                            )}
+                            {appointment.status !== 'cancelled' && appointment.status !== 'completed' && appointment.paymentStatus !== 'paid' && (
+                              <Button
+                                onClick={() => handleCancelAppointment(appointment.id)}
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <XCircle className="w-4 h-4 mr-1" />
+                                Cancel
+                              </Button>
+                            )}
                             <Button
-                              onClick={() => handleCancelAppointment(appointment.id)}
+                              onClick={() => handleOpenNotesModal(appointment)}
                               variant="outline"
                               size="sm"
-                              className="text-red-600 hover:text-red-700"
+                              disabled={appointment.status !== 'completed'}
+                              className={appointment.status === 'completed'
+                                ? appointment.note
+                                  ? 'text-gray-500 hover:text-gray-700'
+                                  : 'text-cyan-600 hover:text-cyan-700'
+                                : 'text-gray-400 cursor-not-allowed opacity-50'}
+                              title={
+                                appointment.status !== 'completed'
+                                  ? 'Notes available after consultation is completed'
+                                  : appointment.note
+                                    ? 'Consultation notes already saved (read-only)'
+                                    : 'Add consultation notes'
+                              }
                             >
-                              <XCircle className="w-4 h-4 mr-1" />
-                              Cancel
+                              <FileText className="w-4 h-4 mr-1" />
+                              {appointment.note ? 'View Notes' : 'Add Notes'}
                             </Button>
-                          )}
-                          <Button
-                            onClick={() => handleOpenNotesModal(appointment)}
-                            variant="outline"
-                            size="sm"
-                            className="text-cyan-600 hover:text-cyan-700"
-                          >
-                            <FileText className="w-4 h-4 mr-1" />
-                            Notes
-                          </Button>
-                          {appointment.status === 'pending' && (
-                            <Button
-                              onClick={() => handleAppointmentStatusChange(appointment.id, 'confirmed')}
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Confirm
-                            </Button>
-                          )}
-                          {appointment.status === 'confirmed' && (
-                            <Button
-                              onClick={() => handleAppointmentStatusChange(appointment.id, 'completed')}
-                              size="sm"
-                              className="bg-blue-600 hover:bg-blue-700"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Mark Completed
-                            </Button>
-                          )}
+                            {/* View Lab Reports button — for completed, confirmed, rescheduled appointments */}
+                            {['completed', 'confirmed', 'rescheduled'].includes(appointment.status) && appointment.patient?.id && (
+                              <LabReportButton patientId={appointment.patient.id} appointmentId={appointment.id} />
+                            )}
+                            {appointment.status === 'pending' && (
+                              <Button
+                                onClick={() => handleAppointmentStatusChange(appointment.id, 'confirmed')}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Confirm
+                              </Button>
+                            )}
+                            {appointment.status === 'confirmed' && appointment.paymentStatus !== 'paid' && (
+                              <Button
+                                onClick={() => handleAppointmentStatusChange(appointment.id, 'completed')}
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Mark Completed
+                              </Button>
+                            )}
+                            {['confirmed', 'rescheduled'].includes(appointment.status) && appointment.paymentStatus === 'paid' && !appointment.note && (
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    const token = localStorage.getItem('token');
+                                    await axios.post(`${API_BASE}/doctor/appointments/notify-call`,
+                                      { appointmentId: appointment.id },
+                                      { headers: { Authorization: `Bearer ${token}` } }
+                                    );
+                                  } catch (e) { /* non-blocking */ }
+                                  window.location.href = `/video-call?channel=apt_${appointment.id}&role=Doctor`;
+                                }}
+                                size="sm"
+                                className="bg-cyan-600 hover:bg-cyan-700"
+                              >
+                                🎥 Join Video Call
+                              </Button>
+                            )}
+                            {['confirmed', 'rescheduled'].includes(appointment.status) && appointment.paymentStatus !== 'paid' && (
+                              <span className="text-xs text-gray-400 flex items-center gap-1 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                                🎥 Awaiting payment
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1187,6 +1378,12 @@ export default function Doctor() {
         {/* Profile Tab */}
         {activeTab === 'profile' && (
           <div className="space-y-6">
+            <button
+              onClick={() => setActiveTab('appointments')}
+              className="flex items-center gap-1 text-sm text-cyan-600 hover:text-cyan-800 transition-colors"
+            >
+              ← Back to Dashboard
+            </button>
             {/* Verification Status Banner */}
             {profileData?.profile && (
               <div className={`p-4 rounded-xl border flex items-center justify-between ${
@@ -1453,165 +1650,6 @@ export default function Doctor() {
             </Card>
           </div>
         )}
-
-        {/* Earnings Tab */}
-        {activeTab === 'earnings' && (
-          <div className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border-2 border-green-100">
-                <CardContent className="pt-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500">Total Earnings</p>
-                      <p className="text-3xl font-bold text-green-600">
-                        NPR {earnings ? earnings.totalEarnings.toLocaleString() : '—'}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-2 border-cyan-100">
-                <CardContent className="pt-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500">Paid Appointments</p>
-                      <p className="text-3xl font-bold text-cyan-600">
-                        {earnings ? earnings.totalPaidAppointments : '—'}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-cyan-100 rounded-full flex items-center justify-center">
-                      <CreditCard className="w-6 h-6 text-cyan-600" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-2 border-purple-100">
-                <CardContent className="pt-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500">Avg. Per Appointment</p>
-                      <p className="text-3xl font-bold text-purple-600">
-                        {earnings && earnings.totalPaidAppointments > 0
-                          ? `NPR ${Math.round(earnings.totalEarnings / earnings.totalPaidAppointments).toLocaleString()}`
-                          : '—'}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                      <DollarSign className="w-6 h-6 text-purple-600" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Monthly Breakdown */}
-            {earnings?.byMonth && Object.keys(earnings.byMonth).length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-cyan-600" />
-                    Monthly Breakdown
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {Object.entries(earnings.byMonth).map(([month, amount]) => {
-                      const max = Math.max(...Object.values(earnings.byMonth));
-                      const pct = Math.round((amount / max) * 100);
-                      return (
-                        <div key={month} className="flex items-center gap-3">
-                          <span className="text-sm text-gray-600 w-24 shrink-0">{month}</span>
-                          <div className="flex-1 bg-gray-100 rounded-full h-3">
-                            <div className="bg-cyan-500 h-3 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-sm font-semibold text-gray-700 w-28 text-right">
-                            NPR {amount.toLocaleString()}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Payment History Table */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-cyan-600" />
-                    Payment History
-                  </CardTitle>
-                  <Button variant="outline" size="sm" onClick={fetchEarnings}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!earnings ? (
-                  <div className="text-center py-8 text-gray-500">Loading...</div>
-                ) : earnings.payments.length === 0 ? (
-                  <div className="text-center py-10 text-gray-500">
-                    <CreditCard className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No payments received yet.</p>
-                    <p className="text-sm mt-1">Payments will appear here once patients pay for confirmed appointments.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 text-left">
-                          <th className="py-3 px-3 font-semibold text-gray-600">Patient</th>
-                          <th className="py-3 px-3 font-semibold text-gray-600">Appointment</th>
-                          <th className="py-3 px-3 font-semibold text-gray-600">eSewa Ref</th>
-                          <th className="py-3 px-3 font-semibold text-gray-600">Paid On</th>
-                          <th className="py-3 px-3 font-semibold text-gray-600 text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {earnings.payments.map(p => (
-                          <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50">
-                            <td className="py-3 px-3">
-                              <p className="font-medium text-[#344256]">{p.patientName}</p>
-                              <p className="text-xs text-gray-400">{p.patientEmail}</p>
-                            </td>
-                            <td className="py-3 px-3 text-gray-600">
-                              {p.appointmentDate} {p.appointmentTime && `at ${p.appointmentTime}`}
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
-                                {p.esewaRefId || '—'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-gray-500 text-xs">
-                              {new Date(p.paidAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              <span className="font-bold text-green-600">NPR {p.amount.toLocaleString()}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200">
-                          <td colSpan={4} className="py-3 px-3 font-semibold text-gray-700">Total</td>
-                          <td className="py-3 px-3 text-right font-bold text-green-700 text-base">
-                            NPR {earnings.totalEarnings.toLocaleString()}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </main>
 
       {/* Schedule Modal */}
@@ -1815,17 +1853,15 @@ export default function Doctor() {
                       }`}
                       onClick={() => markNotificationAsRead(notification.id)}
                     >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
+                      <div className="flex items-start justify-between">
                           <p className={`font-medium ${!notification.read ? 'text-blue-900' : 'text-gray-900'}`}>
                             {notification.message}
                           </p>
                           <p className="text-sm text-gray-500 mt-1">
                             {formatDateTime(notification.timestamp?.split('T')[0], notification.timestamp?.split('T')[1]?.substring(0, 5))}
                           </p>
-                        </div>
                         {!notification.read && (
-                          <span className="w-2 h-2 bg-blue-600 rounded-full mt-2"></span>
+                          <span className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></span>
                         )}
                       </div>
                     </div>
@@ -1845,7 +1881,16 @@ export default function Doctor() {
               <div className="flex justify-between items-start">
                 <div>
                   <CardTitle className="text-xl text-[#344256]">
-                    {selectedAppointment.status === 'completed' ? '📋 Consultation Notes (Read-Only)' : '📋 Consultation Notes'}
+                    {selectedAppointment.status === 'completed'
+                      ? (() => {
+                          const completedAt = selectedAppointment.updatedAt || selectedAppointment.createdAt;
+                          const hoursElapsed = completedAt ? (Date.now() - new Date(completedAt).getTime()) / (1000 * 60 * 60) : 0;
+                          const hasNote = !!selectedAppointment.note;
+                          return (hasNote || hoursElapsed > 24)
+                            ? '📋 Consultation Notes (Read-Only)'
+                            : '📋 Add Consultation Notes';
+                        })()
+                      : '📋 Consultation Notes'}
                   </CardTitle>
                   <CardDescription className="mt-1">
                     Patient: <span className="font-semibold">{selectedAppointment.patient?.fullName}</span>
@@ -1861,7 +1906,15 @@ export default function Doctor() {
 
             <CardContent className="space-y-6 pt-5">
               {(() => {
-                const ro = selectedAppointment.status === 'completed';
+                // Editable only if completed AND no note saved yet (within 24h window)
+                const completedAt = selectedAppointment.updatedAt || selectedAppointment.createdAt;
+                const hoursElapsed = completedAt
+                  ? (Date.now() - new Date(completedAt).getTime()) / (1000 * 60 * 60)
+                  : 0;
+                const hasNote = !!selectedAppointment.note;
+                const ro = selectedAppointment.status !== 'completed'
+                  ? false  // not completed yet — editable (shouldn't happen now but safe)
+                  : hasNote || hoursElapsed > 24; // completed: locked if note exists OR >24h
                 const ta = (field, placeholder, rows = 2) => (
                   <textarea
                     value={notesForm[field]}
@@ -1991,7 +2044,11 @@ export default function Doctor() {
                     {ro && (
                       <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        <p className="text-sm text-green-800">This appointment is completed. Notes are locked and visible to the patient in their medical records.</p>
+                        <p className="text-sm text-green-800">
+                          {ro
+                            ? 'Notes have been saved and are now locked. Visible to the patient in their medical records.'
+                            : 'Appointment completed. Add consultation notes now — once saved they cannot be edited.'}
+                        </p>
                       </div>
                     )}
 

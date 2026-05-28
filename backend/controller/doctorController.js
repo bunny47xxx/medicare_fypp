@@ -1,4 +1,4 @@
-const { User, Appointment, DoctorSchedule, AppointmentNote, DoctorAvailability, DoctorProfile } = require('../model/associations');
+const { User, Appointment, DoctorSchedule, AppointmentNote, DoctorAvailability, DoctorProfile, PatientNotification } = require('../model/associations');
 const { Op, sequelize } = require('sequelize');
 const { sequelize: dbSequelize } = require('../viable/db');
 
@@ -220,7 +220,7 @@ const getDoctorAppointments = async (req, res) => {
           required: false,
         },
       ],
-      order: [['appointmentDate', 'ASC'], ['appointmentTime', 'ASC']],
+      order: [['appointmentDate', 'DESC'], ['appointmentTime', 'DESC']],
     });
 
     res.json({ appointments });
@@ -234,7 +234,7 @@ const getDoctorAppointments = async (req, res) => {
 const updateAppointmentStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, appointmentDate, appointmentTime } = req.body;
 
     const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled', 'rescheduled'];
     if (!validStatuses.includes(status)) {
@@ -249,7 +249,52 @@ const updateAppointmentStatus = async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' });
     }
 
-    await appointment.update({ status });
+    // Block cancel if patient has already paid
+    if (appointment.paymentStatus === 'paid' && status === 'cancelled') {
+      return res.status(400).json({ error: 'Cannot cancel a paid appointment.' });
+    }
+
+    // Build update payload
+    const updateData = { status };
+    if (status === 'rescheduled' && appointmentDate) updateData.appointmentDate = appointmentDate;
+    if (status === 'rescheduled' && appointmentTime) updateData.appointmentTime = appointmentTime;
+
+    await appointment.update(updateData);
+
+    // Notify patient when appointment is confirmed
+    if (status === 'confirmed') {
+      const doctor = await User.findByPk(req.user.id, { attributes: ['fullName'] });
+      await PatientNotification.create({
+        patientId: appointment.patientId,
+        type: 'appointment_confirmed',
+        title: 'Appointment Confirmed',
+        message: `Dr. ${doctor.fullName} has confirmed your appointment on ${appointment.appointmentDate} at ${appointment.appointmentTime}. Please complete your payment to proceed.`,
+        appointmentId: appointment.id,
+      });
+    }
+
+    // Notify patient when appointment is rescheduled
+    if (status === 'rescheduled') {
+      const doctor = await User.findByPk(req.user.id, { attributes: ['fullName'] });
+      const newDate = appointmentDate || appointment.appointmentDate;
+      const newTime = appointmentTime || appointment.appointmentTime;
+
+      // Format time to 12h
+      const formatTime = (t) => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+      };
+
+      await PatientNotification.create({
+        patientId: appointment.patientId,
+        type: 'appointment_rescheduled',
+        title: '📅 Appointment Rescheduled',
+        message: `Dr. ${doctor.fullName} has rescheduled your appointment to ${newDate} at ${formatTime(newTime)}. Please complete your payment to confirm the new slot.`,
+        appointmentId: appointment.id,
+      });
+    }
 
     res.json({
       message: 'Appointment status updated successfully',
@@ -298,6 +343,30 @@ const addAppointmentNote = async (req, res) => {
         doctorId: req.user.id,
         patientId: appointment.patient.id,
         ...fields,
+      });
+    }
+
+    // Notify patient that consultation notes are ready
+    const doctor = await User.findByPk(req.user.id, { attributes: ['fullName'] });
+    await PatientNotification.create({
+      patientId: appointment.patient.id,
+      type: 'consultation_notes',
+      title: 'Consultation Notes Available',
+      message: `Dr. ${doctor.fullName} has added consultation notes for your appointment on ${appointment.appointmentDate}. You can view them in your dashboard.`,
+      appointmentId: appointment.id,
+    });
+
+    // Notify patient about follow-up if suggested
+    if (followUpDate) {
+      const formatted = new Date(followUpDate).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+      await PatientNotification.create({
+        patientId: appointment.patient.id,
+        type: 'follow_up',
+        title: '📅 Follow-up Consultation Required',
+        message: `Dr. ${doctor.fullName} recommends a follow-up consultation on ${formatted}. Please book your next appointment.`,
+        appointmentId: appointment.id,
       });
     }
 
@@ -559,6 +628,41 @@ const getDoctorEarnings = async (req, res) => {
   }
 };
 
+// Notify patient that doctor has started a video call
+const notifyVideoCall = async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+
+    const appointment = await Appointment.findOne({
+      where: { id: appointmentId, doctorId: req.user.id },
+      include: [{ model: User, as: 'patient', attributes: ['id', 'fullName'] }],
+    });
+
+    if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
+
+    const doctor = await User.findByPk(req.user.id, { attributes: ['fullName'] });
+
+    // Remove any previous unanswered call notification for this appointment
+    await PatientNotification.destroy({
+      where: { appointmentId, type: 'video_call' },
+    });
+
+    await PatientNotification.create({
+      patientId:     appointment.patient.id,
+      type:          'video_call',
+      title:         '📹 Doctor is calling you!',
+      message:       `Dr. ${doctor.fullName} has started the video consultation. Click "Join Call" to connect.`,
+      appointmentId: appointment.id,
+      isRead:        false,
+    });
+
+    res.json({ message: 'Patient notified' });
+  } catch (error) {
+    console.error('Notify video call error:', error);
+    res.status(500).json({ error: 'Failed to notify patient' });
+  }
+};
+
 module.exports = {
   getDoctorProfile,
   updateDoctorProfile,
@@ -574,4 +678,5 @@ module.exports = {
   createMedicalRecord,
   getDoctorMedicalRecords,
   getDoctorEarnings,
+  notifyVideoCall,
 };

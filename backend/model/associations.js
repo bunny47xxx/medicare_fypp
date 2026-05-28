@@ -6,6 +6,8 @@ const PendingRegistration = require('./PendingRegistration');
 const DoctorAvailability = require('./DoctorAvailability');
 const MedicalRecord = require('./MedicalRecord');
 const DoctorProfile = require('./DoctorProfile');
+const PatientNotification = require('./PatientNotification');
+const LabReport = require('./LabReport');
 
 // Appointments
 User.hasMany(Appointment, { foreignKey: 'patientId', as: 'patientAppointments' });
@@ -37,6 +39,15 @@ MedicalRecord.belongsTo(Appointment, { foreignKey: 'appointmentId', as: 'appoint
 User.hasOne(DoctorProfile, { foreignKey: 'doctorId', as: 'profile' });
 DoctorProfile.belongsTo(User, { foreignKey: 'doctorId', as: 'doctor' });
 
+// Patient Notifications
+User.hasMany(PatientNotification, { foreignKey: 'patientId', as: 'notifications' });
+PatientNotification.belongsTo(User, { foreignKey: 'patientId', as: 'patient' });
+Appointment.hasMany(PatientNotification, { foreignKey: 'appointmentId', as: 'notifications' });
+
+// Lab Reports
+User.hasMany(LabReport, { foreignKey: 'patientId', as: 'labReports' });
+LabReport.belongsTo(User, { foreignKey: 'patientId', as: 'patient' });
+
 module.exports = {
   User,
   Appointment,
@@ -46,6 +57,8 @@ module.exports = {
   DoctorAvailability,
   MedicalRecord,
   DoctorProfile,
+  PatientNotification,
+  LabReport,
 };
 
 

@@ -13,6 +13,9 @@ const {
   changeEmailAndResendOtp,
   getPatientMedicalRecords,
   getMedicalRecordById,
+  getPatientNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
 } = require('../controller/patientController');
 
 const router = express.Router();
@@ -38,5 +41,10 @@ router.put('/appointments/:id/cancel', authenticateToken, requirePatient, cancel
 // Medical records
 router.get('/medical-records', authenticateToken, requirePatient, getPatientMedicalRecords);
 router.get('/medical-records/:recordId', authenticateToken, requirePatient, getMedicalRecordById);
+
+// Notifications
+router.get('/notifications', authenticateToken, requirePatient, getPatientNotifications);
+router.put('/notifications/:id/read', authenticateToken, requirePatient, markNotificationRead);
+router.put('/notifications/read-all', authenticateToken, requirePatient, markAllNotificationsRead);
 
 module.exports = router;

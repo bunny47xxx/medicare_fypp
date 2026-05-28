@@ -15,6 +15,7 @@ import ServicesPage from "../pages/ServicesPage";
 import AboutPage from "../pages/AboutPage";
 import ContactPage from "../pages/ContactPage";
 import PaymentVerify from "../pages/PaymentVerify";
+import VideoCall from "../pages/VideoCall";
 
 export default function Approutes(){
   return(
@@ -40,6 +41,7 @@ export default function Approutes(){
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/payment/verify" element={<PaymentVerify />} />
+        <Route path="/video-call" element={<VideoCall />} />
     </Routes>
 
   )

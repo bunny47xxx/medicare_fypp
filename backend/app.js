@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const userRoutes = require('./routes/userRoutes');
@@ -6,7 +5,9 @@ const adminRoutes = require('./routes/adminRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
-require('dotenv').config();
+const agoraRoutes      = require('./routes/agoraRoutes');
+const labReportRoutes  = require('./routes/labReportRoutes');
+require('dotenv').config()
 
 const app = express();
 
@@ -19,6 +20,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/agora',        agoraRoutes);
+app.use('/api/lab-reports',  labReportRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ ok: true });

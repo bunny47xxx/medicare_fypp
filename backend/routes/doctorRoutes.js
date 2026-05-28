@@ -15,6 +15,7 @@ const {
   createMedicalRecord,
   getDoctorMedicalRecords,
   getDoctorEarnings,
+  notifyVideoCall,
 } = require('../controller/doctorController');
 
 const router = express.Router();
@@ -44,5 +45,8 @@ router.get('/medical-records', authenticateToken, requireDoctor, getDoctorMedica
 
 // Earnings
 router.get('/earnings', authenticateToken, requireDoctor, getDoctorEarnings);
+
+// Video call notification
+router.post('/appointments/notify-call', authenticateToken, requireDoctor, notifyVideoCall);
 
 module.exports = router;

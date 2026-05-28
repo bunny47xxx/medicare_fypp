@@ -28,11 +28,11 @@ export default function ServicesSection() {
     {
       icon: UserCheck,
       title: "Doctor Recommendation",
-      description: "Get personalized doctor suggestions based on your symptoms and medical history.",
+      description: "Find the right doctor based on your specialty needs and location.",
       features: [
-        "AI-powered matching system",
-        "Specialist recommendations",
-        "Patient reviews & ratings"
+        "Search by specialization",
+        "Verified doctor profiles",
+        "Consultation fee transparency"
       ],
       color: "green"
     }

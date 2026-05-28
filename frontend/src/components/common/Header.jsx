@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { User as UserIcon, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { User as UserIcon, LogOut, ChevronDown } from 'lucide-react';
 
 export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -117,16 +117,6 @@ export default function Header() {
                 >
                   About
                 </button>
-                <button
-                  onClick={() => handleNavigation('/contact')}
-                  className={`font-medium transition-colors ${
-                    window.location.pathname === '/contact'
-                      ? 'text-cyan-600 border-b-2 border-cyan-600 pb-1'
-                      : 'text-gray-700 hover:text-cyan-600'
-                  }`}
-                >
-                  Contact
-                </button>
               </>
             )}
             {isLoggedIn && (
@@ -188,16 +178,6 @@ export default function Header() {
                       >
                         <UserIcon className="w-4 h-4" />
                         <span>My Dashboard</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleNavigation('/profile');
-                          setShowUserMenu(false);
-                        }}
-                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-cyan-50 transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                        <span>Settings</span>
                       </button>
                       <div className="border-t border-gray-200 my-1" />
                       <button

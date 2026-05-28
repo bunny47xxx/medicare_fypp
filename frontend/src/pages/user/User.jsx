@@ -21,10 +21,12 @@ import {
   AlertCircle,
   Activity,
   Pill,
-  ClipboardList
+  ClipboardList,
+  Bell,
 } from 'lucide-react';
 import axios from 'axios';
 import { generateConsultationPdf } from '@/utils/generateConsultationPdf';
+import { toast } from 'react-toastify';
 
 export default function User() {
   const [user, setUser] = useState(null);
@@ -45,6 +47,7 @@ export default function User() {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [bookingReason, setBookingReason] = useState('');
+  const [consultationType, setConsultationType] = useState('online');
   const [doctorSchedule, setDoctorSchedule] = useState([]);
 
   const API_BASE = 'http://localhost:5000/api';
@@ -57,6 +60,7 @@ export default function User() {
         setUser(parsedUser);
         loadAppointments();
         loadTotalRecords();
+        loadNotifications();
       } catch (error) {
         console.error('Error parsing user data:', error);
       }
@@ -70,7 +74,14 @@ export default function User() {
       }
     };
     window.addEventListener('openBooking', handleOpenBooking);
-    return () => window.removeEventListener('openBooking', handleOpenBooking);
+
+    // Poll notifications every 15s to catch incoming call notifications
+    const pollInterval = setInterval(loadNotifications, 15000);
+
+    return () => {
+      window.removeEventListener('openBooking', handleOpenBooking);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const loadTotalRecords = async () => {
@@ -83,6 +94,32 @@ export default function User() {
     } catch (error) {
       console.error('Error loading total records:', error);
       setTotalRecords(0);
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE}/patient/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications(res.data.notifications || []);
+      setUnreadCount(res.data.unreadCount || 0);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  const markAllRead = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE}/patient/notifications/read-all`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking notifications read:', error);
     }
   };
 
@@ -135,6 +172,7 @@ export default function User() {
     setSelectedDate('');
     setSelectedTime('');
     setBookingReason('');
+    setConsultationType('online');
     loadDoctors();
   };
 
@@ -165,6 +203,9 @@ export default function User() {
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
 
   const handleConfirmBooking = async () => {
     if (!selectedDate || !selectedTime || !bookingReason.trim()) {
@@ -187,9 +228,10 @@ export default function User() {
         appointmentDate: selectedDate,
         appointmentTime: selectedTime,
         reason: bookingReason,
+        consultationType,
       }, { headers: { Authorization: `Bearer ${token}` } });
 
-      alert('Appointment booked! You will be able to pay once the doctor confirms your appointment.');
+      toast.success('Appointment booked! You will be able to pay once the doctor confirms your appointment.');
       setShowBookingModal(false);
       loadAppointments();
 
@@ -201,7 +243,7 @@ export default function User() {
       setBookingReason('');
     } catch (error) {
       console.error('Booking error:', error);
-      alert(error.response?.data?.error || 'Failed to book appointment');
+      toast.error(error.response?.data?.error || 'Failed to book appointment');
     } finally {
       setLoading(false);
     }
@@ -212,7 +254,9 @@ export default function User() {
       doctor.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doctor.specialization?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doctor.city?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    const matchesSpecialty = !selectedSpecialtyFilter ||
+      doctor.specialization?.toLowerCase() === selectedSpecialtyFilter.toLowerCase();
+    return matchesSearch && matchesSpecialty;
   });
 
   // Generate available time slots based on doctor schedule
@@ -267,15 +311,17 @@ export default function User() {
       case 'completed': return 'bg-green-100 text-green-700';
       case 'cancelled': return 'bg-red-100 text-red-700';
       case 'pending': return 'bg-yellow-100 text-yellow-700';
+      case 'rescheduled': return 'bg-purple-100 text-purple-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
 
   const specialties = [...new Set(doctors.map(d => d.specialization).filter(Boolean))].sort();
 
-  // Get upcoming appointments (not cancelled or completed)
+  // Get upcoming appointments (not cancelled, completed, or rescheduled-with-notes)
   const upcomingAppointments = appointments.filter(apt => 
-    apt.status !== 'cancelled' && apt.status !== 'completed'
+    apt.status !== 'cancelled' && apt.status !== 'completed' &&
+    !(apt.status === 'rescheduled' && apt.note)
   ).slice(0, 3);
 
 
@@ -302,7 +348,21 @@ export default function User() {
                     </div>
                   )}
                 </div>
-                <div className="hidden md:block">
+                <div className="hidden md:flex items-center gap-3">
+                  {/* Notification Bell */}
+                  <div className="relative">
+                    <button
+                      onClick={() => { setShowNotifPanel(v => !v); if (!showNotifPanel) loadNotifications(); }}
+                      className="bg-white/20 hover:bg-white/30 rounded-full p-3 transition-colors relative"
+                    >
+                      <Bell className="w-6 h-6" />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                   <div className="bg-white/20 rounded-full p-4">
                     <Heart className="w-12 h-12" />
                   </div>
@@ -412,8 +472,8 @@ export default function User() {
                             {appointment.status}
                           </span>
                         </div>
-                        {/* Pay Now button — only after doctor confirms */}
-                        {appointment.status === 'confirmed' && appointment.paymentStatus !== 'paid' && (
+                        {/* Pay Now button — after doctor confirms or reschedules */}
+                        {['confirmed', 'rescheduled'].includes(appointment.status) && appointment.paymentStatus !== 'paid' && (
                           <div className="mt-2 ml-16">
                             <button
                               className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
@@ -434,19 +494,41 @@ export default function User() {
                             </button>
                           </div>
                         )}
-                        {/* Video call coming soon — shown after payment */}
-                        {appointment.status === 'confirmed' && appointment.paymentStatus === 'paid' && (
-                          <div className="mt-2 ml-16 flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
-                            <span className="text-lg">🎥</span>
-                            <div>
-                              <p className="text-xs font-semibold text-cyan-800">Online Video Consultation</p>
-                              <p className="text-xs text-cyan-600">Coming soon — your doctor will contact you</p>
+                        {/* Video call — only show when paid and no notes yet (consultation not done) */}
+                        {['confirmed', 'rescheduled'].includes(appointment.status) && appointment.paymentStatus === 'paid' && !appointment.note && (() => {
+                          const callNotif = notifications.find(
+                            n => n.type === 'video_call' && n.appointmentId === appointment.id && !n.isRead
+                          );
+                          return (
+                            <div className="mt-2 ml-16 flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
+                              <span className="text-lg">🎥</span>
+                              <div>
+                                <p className="text-xs font-semibold text-cyan-800">Online Video Consultation</p>
+                                <p className="text-xs text-cyan-600">
+                                  {callNotif ? 'Doctor is calling you!' : 'Coming soon — your doctor will contact you'}
+                                </p>
+                              </div>
+                              {callNotif && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const token = localStorage.getItem('token');
+                                      await axios.put(`${API_BASE}/patient/notifications/${callNotif.id}/read`, {}, {
+                                        headers: { Authorization: `Bearer ${token}` },
+                                      });
+                                      setNotifications(prev => prev.map(x => x.id === callNotif.id ? { ...x, isRead: true } : x));
+                                      setUnreadCount(prev => Math.max(0, prev - 1));
+                                    } catch (e) { /* non-blocking */ }
+                                    window.location.href = `/video-call?channel=apt_${appointment.id}&role=Patient`;
+                                  }}
+                                  className="ml-auto text-xs bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors animate-pulse"
+                                >
+                                  Join Call
+                                </button>
+                              )}
                             </div>
-                            <span className="ml-auto text-xs bg-cyan-100 text-cyan-700 border border-cyan-300 rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
-                              Coming Soon
-                            </span>
-                          </div>
-                        )}
+                          );
+                        })()}
                         {appointment.status === 'completed' && appointment.note && (
                           <div className="mt-2 ml-16">
                             <Button
@@ -613,6 +695,11 @@ export default function User() {
                                   <p className="font-semibold text-[#344256]">{doctor.fullName}</p>
                                   <p className="text-sm text-gray-600">{doctor.specialization}</p>
                                   <p className="text-sm text-gray-500">{doctor.city}</p>
+                                  {doctor.profile?.consultationFee && (
+                                    <p className="text-sm font-semibold text-cyan-700 mt-0.5">
+                                      NPR {parseFloat(doctor.profile.consultationFee).toLocaleString()}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                               <Button variant="outline" size="sm">
@@ -659,17 +746,24 @@ export default function User() {
                           <p className="text-sm mt-2">Doctor may not be available on this day</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-4 gap-3">
-                          {availableSlots.map((time, index) => (
-                            <button
-                              key={index}
-                              onClick={() => handleSelectSlot(selectedDate, time)}
-                              className="p-3 border rounded-lg hover:bg-cyan-50 hover:border-cyan-600 transition-colors text-center"
-                            >
-                              <Clock className="w-4 h-4 mx-auto mb-1 text-cyan-600" />
-                              <span className="text-sm font-medium">{formatTime(time)}</span>
-                            </button>
-                          ))}
+                        <div className="grid grid-cols-3 gap-3">
+                          {availableSlots.map((time, index) => {
+                            const [h, m] = time.split(':').map(Number);
+                            const endMin = m + 10;
+                            const endH = endMin >= 60 ? h + 1 : h;
+                            const endTime = `${String(endH).padStart(2,'0')}:${String(endMin % 60).padStart(2,'0')}`;
+                            return (
+                              <button
+                                key={index}
+                                onClick={() => handleSelectSlot(selectedDate, time)}
+                                className="p-3 border rounded-lg hover:bg-cyan-50 hover:border-cyan-600 transition-colors text-center"
+                              >
+                                <Clock className="w-4 h-4 mx-auto mb-1 text-cyan-600" />
+                                <span className="text-xs font-semibold block">{formatTime(time)}</span>
+                                <span className="text-xs text-gray-400">– {formatTime(endTime)}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -706,7 +800,71 @@ export default function User() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Clock className="w-4 h-4 text-cyan-600" />
-                      <span className="text-gray-700">{formatTime(selectedTime)}</span>
+                      <span className="text-gray-700">
+                        {formatTime(selectedTime)} – {(() => {
+                          const [h, m] = selectedTime.split(':').map(Number);
+                          const endMin = m + 10;
+                          return formatTime(`${String(endMin >= 60 ? h + 1 : h).padStart(2,'0')}:${String(endMin % 60).padStart(2,'0')}`);
+                        })()}
+                      </span>
+                    </div>
+                    {selectedDoctor.profile?.consultationFee && (
+                      <div className="flex items-center justify-between pt-2 border-t border-blue-200 mt-2">
+                        <span className="text-sm font-medium text-gray-700">Consultation Fee</span>
+                        <span className="font-bold text-cyan-700 text-base">
+                          NPR {parseFloat(selectedDoctor.profile.consultationFee).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    {consultationType && (
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-sm font-medium text-gray-700">Type</span>
+                        <span className="text-sm font-semibold text-cyan-700 capitalize">
+                          {consultationType === 'online' ? '🎥 Online' : '🏥 Physical'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Consultation Type <span className="text-red-500">*</span></Label>
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setConsultationType('online')}
+                        className={`flex items-center gap-3 p-4 border-2 rounded-xl transition-colors ${
+                          consultationType === 'online'
+                            ? 'border-cyan-600 bg-cyan-50'
+                            : 'border-gray-200 hover:border-cyan-300'
+                        }`}
+                      >
+                        <span className="text-2xl">🎥</span>
+                        <div className="text-left">
+                          <p className="font-semibold text-sm text-[#344256]">Online</p>
+                          <p className="text-xs text-gray-500">Video consultation</p>
+                        </div>
+                        {consultationType === 'online' && (
+                          <CheckCircle className="w-4 h-4 text-cyan-600 ml-auto" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConsultationType('physical')}
+                        className={`flex items-center gap-3 p-4 border-2 rounded-xl transition-colors ${
+                          consultationType === 'physical'
+                            ? 'border-cyan-600 bg-cyan-50'
+                            : 'border-gray-200 hover:border-cyan-300'
+                        }`}
+                      >
+                        <span className="text-2xl">🏥</span>
+                        <div className="text-left">
+                          <p className="font-semibold text-sm text-[#344256]">Physical</p>
+                          <p className="text-xs text-gray-500">In-person visit</p>
+                        </div>
+                        {consultationType === 'physical' && (
+                          <CheckCircle className="w-4 h-4 text-cyan-600 ml-auto" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -750,6 +908,104 @@ export default function User() {
       )}
 
       <Footer />
+
+      {/* Notification Panel */}
+      {showNotifPanel && (
+        <div className="fixed inset-0 z-40" onClick={() => setShowNotifPanel(false)}>
+          <div
+            className="absolute top-20 right-6 w-96 max-h-[80vh] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5" />
+                <span className="font-semibold">Notifications</span>
+                {unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5">{unreadCount} new</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <button onClick={markAllRead} className="text-xs text-cyan-100 hover:text-white underline">
+                    Mark all read
+                  </button>
+                )}
+                <button onClick={() => setShowNotifPanel(false)}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {notifications.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <Bell className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No notifications yet</p>
+                </div>
+              ) : (
+                notifications.map(n => (
+                  <div
+                    key={n.id}
+                    className={`px-4 py-3 border-b last:border-0 hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-cyan-50' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        n.type === 'appointment_confirmed' ? 'bg-green-100' :
+                        n.type === 'appointment_rescheduled' ? 'bg-purple-100' :
+                        n.type === 'follow_up' ? 'bg-orange-100' :
+                        n.type === 'video_call' ? 'bg-cyan-100' : 'bg-blue-100'
+                      }`}>
+                        {n.type === 'appointment_confirmed' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                        {n.type === 'appointment_rescheduled' && <Calendar className="w-4 h-4 text-purple-600" />}
+                        {n.type === 'follow_up' && <Calendar className="w-4 h-4 text-orange-600" />}
+                        {n.type === 'video_call' && <span className="text-sm">🎥</span>}
+                        {n.type === 'consultation_notes' && <FileText className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold ${!n.isRead ? 'text-[#344256]' : 'text-gray-600'}`}>{n.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.message}</p>
+                        {n.type === 'video_call' && n.appointmentId && (
+                          <button
+                            onClick={async () => {
+                              // Mark as read so notification stops appearing
+                              try {
+                                const token = localStorage.getItem('token');
+                                await axios.put(`${API_BASE}/patient/notifications/${n.id}/read`, {}, {
+                                  headers: { Authorization: `Bearer ${token}` },
+                                });
+                                setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
+                                setUnreadCount(prev => Math.max(0, prev - 1));
+                              } catch (e) { /* non-blocking */ }
+                              window.location.href = `/video-call?channel=apt_${n.appointmentId}&role=Patient`;
+                            }}
+                            className="mt-2 text-xs bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                          >
+                            🎥 Join Call Now
+                          </button>
+                        )}
+                        {n.type === 'follow_up' && (
+                          <button
+                            onClick={() => {
+                              setShowNotifPanel(false);
+                              handleStartBooking();
+                            }}
+                            className="mt-2 text-xs bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                          >
+                            📅 Book Follow-up
+                          </button>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {!n.isRead && <span className="w-2 h-2 bg-cyan-500 rounded-full mt-1.5 flex-shrink-0" />}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* eSewa Payment Modal */}
       {showPaymentModal && paymentData && (

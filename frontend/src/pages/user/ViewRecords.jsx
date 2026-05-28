@@ -15,10 +15,14 @@ import {
   User,
   X,
   Eye,
+  Upload,
+  Trash2,
+  ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { generateConsultationPdf } from '@/utils/generateConsultationPdf';
+import { toast } from 'react-toastify';
 
 export default function ViewRecords() {
   const navigate = useNavigate();
@@ -30,6 +34,12 @@ export default function ViewRecords() {
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [user, setUser] = useState(null);
 
+  // Lab report state
+  const [labReports, setLabReports] = useState([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadForm, setUploadForm] = useState({ title: '', description: '', file: null, appointmentId: null });
+  const [uploading, setUploading] = useState(false);
+
   const API_BASE = 'http://localhost:5000/api';
 
   useEffect(() => {
@@ -39,6 +49,7 @@ export default function ViewRecords() {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
         loadRecords(parsedUser.id);
+        loadLabReports();
       } catch (error) {
         console.error('Error parsing user data:', error);
       }
@@ -94,6 +105,7 @@ export default function ViewRecords() {
           followUpDate: record.followUpDate,
           notes: record.notes,
           appointmentDate: record.appointment ? record.appointment.appointmentDate : null,
+          appointmentId: record.appointment ? record.appointment.id : null,
         }));
 
         setRecords(transformedRecords);
@@ -105,6 +117,59 @@ export default function ViewRecords() {
       console.error('Error loading records:', error);
       // If API fails, show empty state instead of mock data
       setRecords([]);
+    }
+  };
+
+  const loadLabReports = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE}/lab-reports`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setLabReports(res.data.reports || []);
+    } catch (err) {
+      console.error('Error loading lab reports:', err);
+    }
+  };
+
+  const handleUploadLabReport = async () => {
+    if (!uploadForm.title || !uploadForm.file) {
+      toast.warn('Title and file are required');
+      return;
+    }
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('title', uploadForm.title);
+      formData.append('description', uploadForm.description);
+      formData.append('file', uploadForm.file);
+      if (uploadForm.appointmentId) formData.append('appointmentId', uploadForm.appointmentId);
+
+      await axios.post(`${API_BASE}/lab-reports`, formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+      });
+      setShowUploadModal(false);
+      setUploadForm({ title: '', description: '', file: null, appointmentId: null });
+      loadLabReports();
+      toast.success('Lab report uploaded successfully!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteLabReport = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE}/lab-reports/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      loadLabReports();
+      toast.success('Lab report deleted');
+    } catch (err) {
+      toast.error('Failed to delete');
     }
   };
 
@@ -264,7 +329,10 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
       record.doctor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.diagnosis?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesType = activeTab === 'all' || record.type.toLowerCase() === activeTab.toLowerCase();
+    const matchesType = activeTab === 'all'
+      || (activeTab === 'prescription'
+          ? record.prescriptions?.length > 0
+          : record.type.toLowerCase() === activeTab.toLowerCase());
     
     const matchesDate = !dateFilter || record.date === dateFilter;
     
@@ -275,7 +343,7 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
     all: records,
     consultation: records.filter(r => r.type === 'Consultation'),
     'lab report': records.filter(r => r.type === 'Lab Report'),
-    prescription: records.filter(r => r.type === 'Prescription')
+    prescription: records.filter(r => r.prescriptions?.length > 0),
   };
 
   return (
@@ -285,6 +353,12 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Page Header */}
         <div className="mb-6">
+          <button
+            onClick={() => navigate('/user')}
+            className="flex items-center gap-1 text-sm text-cyan-600 hover:text-cyan-800 mb-4 transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
           <h1 className="text-4xl font-bold text-[#344256] mb-2">Medical Records</h1>
           <p className="text-gray-600">View and manage your complete medical history</p>
         </div>
@@ -332,7 +406,7 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Prescriptions</p>
                   <p className="text-2xl font-bold text-purple-600">
-                    {records.filter(r => r.type === 'Prescription').length}
+                    {records.filter(r => r.prescriptions?.length > 0).length}
                   </p>
                 </div>
                 <Pill className="w-10 h-10 text-purple-600 opacity-20" />
@@ -418,11 +492,138 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
           </CardHeader>
           
           <CardContent>
-            {filteredRecords.length === 0 ? (
+            {/* Lab Reports tab — dedicated upload UI */}
+            {activeTab === 'lab report' ? (
+              <div className="space-y-4">
+                {/* Tests Required by Doctor — only from completed consultations */}
+                {(() => {
+                  const latest = records
+                    .filter(r => r.testsRequired && r.status === 'Completed')
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                  if (!latest) return null;
+                  const uploaded = labReports.find(lr => lr.appointmentId === latest.appointmentId || lr.title === latest.testsRequired);
+                  return (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-3 flex items-center gap-1">
+                        <Activity className="w-3 h-3" /> Test Required by Doctor
+                      </p>
+                      <div className="bg-white border border-yellow-100 rounded-lg p-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-0.5">{latest.doctor} · {formatDate(latest.date)}</p>
+                          <p className="text-sm font-medium text-[#344256]">{latest.testsRequired}</p>
+                        </div>
+                        {uploaded ? (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs bg-green-100 text-green-700 border border-green-200 rounded-full px-2 py-0.5">✓ Uploaded</span>
+                            <a href={`${API_BASE}/lab-reports/file/${uploaded.filePath}`} target="_blank" rel="noreferrer"
+                              className="text-xs text-cyan-600 hover:underline flex items-center gap-0.5">
+                              <ExternalLink className="w-3 h-3" /> View
+                            </a>
+                          </div>
+                        ) : (
+                          <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700 text-xs flex-shrink-0"
+                            onClick={() => {
+                              setUploadForm({ title: latest.testsRequired, description: `For consultation on ${formatDate(latest.date)}`, file: null, appointmentId: latest.appointmentId });
+                              setShowUploadModal(true);
+                            }}>
+                            <Upload className="w-3 h-3 mr-1" /> Upload
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Uploaded lab reports list */}
+                {labReports.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Activity className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-600 font-medium">No lab reports uploaded yet</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {records.filter(r => r.testsRequired && r.status === 'Completed').length === 0
+                        ? 'Lab report upload will be available after your online consultation is completed'
+                        : 'Upload reports suggested by your doctor'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {labReports.map(r => (
+                      <div key={r.id} className="border rounded-xl p-4 bg-white hover:shadow-md transition-shadow flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            {r.fileType?.includes('pdf') ? <FileText className="w-5 h-5 text-green-600" /> : <Activity className="w-5 h-5 text-green-600" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[#344256] truncate">{r.title}</p>
+                            {r.description && <p className="text-xs text-gray-500 mt-0.5">{r.description}</p>}
+                            <p className="text-xs text-gray-400 mt-1">
+                              {r.fileName} · {new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <a
+                            href={`${API_BASE}/lab-reports/file/${r.filePath}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs bg-cyan-50 text-cyan-700 border border-cyan-200 px-2 py-1.5 rounded-lg hover:bg-cyan-100 flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" /> View
+                          </a>
+                          <button onClick={() => handleDeleteLabReport(r.id)} className="text-red-400 hover:text-red-600 p-1.5">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : filteredRecords.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                 <p className="text-xl font-semibold text-gray-700 mb-2">No records found</p>
                 <p className="text-gray-600">Try adjusting your search or filters</p>
+              </div>
+            ) : activeTab === 'prescription' ? (
+              /* Prescription-only view */
+              <div className="space-y-4">
+                {filteredRecords.map((record) => (
+                  <div key={record.id} className="border rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-semibold text-[#344256]">{record.doctor}</p>
+                        <p className="text-xs text-gray-500">{formatDate(record.date)}</p>
+                      </div>
+                      {record.diagnosis && (
+                        <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-3 py-0.5">
+                          {record.diagnosis}
+                        </span>
+                      )}
+                    </div>
+                    {/* Prescriptions table */}
+                    <div className="bg-cyan-50 border border-cyan-100 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-cyan-700 mb-3 uppercase tracking-wide">Prescriptions</p>
+                      <div className="space-y-2">
+                        {record.prescriptions.map((p, i) => (
+                          <div key={i} className="bg-white border border-cyan-100 rounded-lg p-3 flex items-start gap-3">
+                            <span className="w-6 h-6 bg-cyan-100 rounded-full flex items-center justify-center text-xs font-bold text-cyan-700 flex-shrink-0">{i + 1}</span>
+                            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                              <div>
+                                <p className="text-xs text-gray-400">Medicine</p>
+                                <p className="font-semibold">{typeof p === 'string' ? p : p.name}</p>
+                              </div>
+                              {p.dosage && <div><p className="text-xs text-gray-400">Dosage</p><p>{p.dosage}</p></div>}
+                              {p.duration && <div><p className="text-xs text-gray-400">Duration</p><p>{p.duration}</p></div>}
+                              {p.instructions && <div><p className="text-xs text-gray-400">Instructions</p><p>{p.instructions}</p></div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="space-y-4">
@@ -473,8 +674,24 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
                                 <strong>Diagnosis:</strong> {record.diagnosis}
                               </p>
                             )}
+                            {record.prescriptions?.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                <span className="text-xs text-gray-500 mr-1 flex items-center gap-1">
+                                  <Pill className="w-3 h-3" /> Prescriptions:
+                                </span>
+                                {record.prescriptions.slice(0, 3).map((p, i) => (
+                                  <span key={i} className="text-xs bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-full px-2 py-0.5">
+                                    {typeof p === 'string' ? p : p.name}
+                                    {p.dosage ? ` ${p.dosage}` : ''}
+                                  </span>
+                                ))}
+                                {record.prescriptions.length > 3 && (
+                                  <span className="text-xs text-gray-400">+{record.prescriptions.length - 3} more</span>
+                                )}
+                              </div>
+                            )}
                             {record.notes && (
-                              <p className="text-sm text-gray-600 line-clamp-2">
+                              <p className="text-sm text-gray-600 line-clamp-2 mt-1">
                                 {record.notes}
                               </p>
                             )}
@@ -695,6 +912,74 @@ ${record.results ? `Test Results:\n${Object.entries(record.results).map(([k, v])
         </div>
       )}
       <Footer />
+
+      {/* Upload Lab Report Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-[#344256]">Upload Lab Report</h2>
+              <button onClick={() => { setShowUploadModal(false); setUploadForm({ title: '', description: '', file: null, appointmentId: null }); }}><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <Label>Report Title <span className="text-red-500">*</span></Label>
+                <Input
+                  className="mt-1"
+                  placeholder="e.g. Blood Test, X-Ray, MRI"
+                  value={uploadForm.title}
+                  onChange={e => setUploadForm({ ...uploadForm, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Description (optional)</Label>
+                <textarea
+                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[70px]"
+                  placeholder="Any notes about this report..."
+                  value={uploadForm.description}
+                  onChange={e => setUploadForm({ ...uploadForm, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>File <span className="text-red-500">*</span></Label>
+                <div className="mt-1 border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-cyan-400 transition-colors">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    id="lab-file-input"
+                    onChange={e => setUploadForm({ ...uploadForm, file: e.target.files[0] })}
+                  />
+                  <label htmlFor="lab-file-input" className="cursor-pointer">
+                    {uploadForm.file ? (
+                      <div>
+                        <p className="text-sm font-medium text-cyan-700">{uploadForm.file.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{(uploadForm.file.size / 1024).toFixed(0)} KB</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                        <p className="text-sm text-gray-600">Click to select file</p>
+                        <p className="text-xs text-gray-400 mt-0.5">PDF, JPG, PNG — max 5MB</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={handleUploadLabReport}
+                  disabled={uploading || !uploadForm.title || !uploadForm.file}
+                  className="flex-1 bg-cyan-600 hover:bg-cyan-700"
+                >
+                  {uploading ? 'Uploading...' : 'Upload Report'}
+                </Button>
+                <Button onClick={() => { setShowUploadModal(false); setUploadForm({ title: '', description: '', file: null, appointmentId: null }); }} variant="outline" className="flex-1">Cancel</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,7 +31,7 @@ const initiatePayment = async (req, res) => {
 
     if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
     if (appointment.paymentStatus === 'paid') return res.status(400).json({ error: 'Already paid' });
-    if (appointment.status !== 'confirmed') {
+    if (!['confirmed', 'rescheduled'].includes(appointment.status)) {
       return res.status(400).json({ error: 'Payment is only allowed after the doctor confirms your appointment.' });
     }
 

@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { User, Appointment, DoctorSchedule, PendingRegistration, DoctorAvailability, AppointmentNote } = require('../model/associations');
+const { User, Appointment, DoctorSchedule, PendingRegistration, DoctorAvailability, AppointmentNote, PatientNotification, DoctorProfile } = require('../model/associations');
 const { generateOtp } = require('../utils/otp');
 const { sendVerificationEmail, sendAppointmentConfirmation } = require('../utils/emailService');
 const { Op } = require('sequelize');
@@ -334,6 +334,12 @@ const getAllDoctors = async (req, res) => {
           where: { isAvailable: true },
           required: false,
         },
+        {
+          model: DoctorProfile,
+          as: 'profile',
+          attributes: ['consultationFee', 'experience', 'bio'],
+          required: false,
+        },
       ],
     });
 
@@ -376,7 +382,7 @@ const getDoctorSchedule = async (req, res) => {
 // Book appointment
 const bookAppointment = async (req, res) => {
   try {
-    const { doctorId, appointmentDate, appointmentTime, reason } = req.body;
+    const { doctorId, appointmentDate, appointmentTime, reason, consultationType } = req.body;
 
     if (!doctorId || !appointmentDate || !appointmentTime) {
       return res.status(400).json({ error: 'Doctor, date, and time are required' });
@@ -418,6 +424,7 @@ const bookAppointment = async (req, res) => {
       appointmentDate,
       appointmentTime,
       reason,
+      consultationType: consultationType || 'online',
       status: 'pending',
     });
 
@@ -600,6 +607,49 @@ const getMedicalRecordById = async (req, res) => {
   }
 };
 
+// Get patient notifications
+const getPatientNotifications = async (req, res) => {
+  try {
+    const notifications = await PatientNotification.findAll({
+      where: { patientId: req.user.id },
+      order: [['createdAt', 'DESC']],
+      limit: 50,
+    });
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    res.json({ notifications, unreadCount });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+};
+
+// Mark single notification as read
+const markNotificationRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await PatientNotification.update(
+      { isRead: true },
+      { where: { id, patientId: req.user.id } }
+    );
+    res.json({ message: 'Notification marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update notification' });
+  }
+};
+
+// Mark all notifications as read
+const markAllNotificationsRead = async (req, res) => {
+  try {
+    await PatientNotification.update(
+      { isRead: true },
+      { where: { patientId: req.user.id, isRead: false } }
+    );
+    res.json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update notifications' });
+  }
+};
+
 module.exports = {
   verifyEmail,
   changeEmailAndResendOtp,
@@ -613,4 +663,7 @@ module.exports = {
   cancelAppointment,
   getPatientMedicalRecords,
   getMedicalRecordById,
+  getPatientNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
 };

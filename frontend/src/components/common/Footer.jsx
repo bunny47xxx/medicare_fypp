@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Mail, Phone, MapPin, Send } from 'lucide-react';
+import { Mail } from 'lucide-react';
 
 export default function Footer() {
-  const [email, setEmail] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -12,12 +9,6 @@ export default function Footer() {
     const userData = localStorage.getItem('user');
     setIsLoggedIn(Boolean(token && userData));
   }, []);
-
-  const handleSendEmail = () => {
-    if (email) {
-      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}`, '_blank');
-    }
-  };
 
   const handleNavigation = (path) => {
     window.location.href = path;
@@ -91,14 +82,6 @@ export default function Footer() {
                       Doctors
                     </button>
                   </li>
-                  <li>
-                    <button
-                      onClick={() => handleNavigation('/contact')}
-                      className="text-gray-300 hover:text-cyan-400 transition-colors text-sm"
-                    >
-                      Contact
-                    </button>
-                  </li>
                 </>
               )}
             </ul>
@@ -156,35 +139,8 @@ export default function Footer() {
             <h3 className="text-lg font-semibold mb-4">Contact</h3>
             <div className="space-y-3">
               <div className="flex items-start space-x-3">
-                <Phone className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
-                <span className="text-gray-300 text-sm">+1 (555) 123-4567</span>
-              </div>
-              <div className="flex items-start space-x-3">
                 <Mail className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
                 <span className="text-gray-300 text-sm">info@medicare.com</span>
-              </div>
-              <div className="flex items-start space-x-3">
-                <MapPin className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
-                <span className="text-gray-300 text-sm">
-                  123 Healthcare Ave, Medical District, NY 10001
-                </span>
-              </div>
-              <div className="pt-2">
-                <div className="flex space-x-2">
-                  <Input
-                    type="email"
-                    placeholder="Your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-gray-400 focus:border-cyan-400"
-                  />
-                  <Button
-                    onClick={handleSendEmail}
-                    className="bg-cyan-600 hover:bg-cyan-700 flex-shrink-0"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
               </div>
             </div>
           </div>

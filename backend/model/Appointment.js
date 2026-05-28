@@ -23,6 +23,11 @@ const Appointment = sequelize.define('Appointment', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  consultationType: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'online', // online | physical
+  },
   status: {
     type: DataTypes.ENUM('pending', 'confirmed', 'completed', 'cancelled', 'rescheduled'),
     allowNull: false,

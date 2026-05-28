@@ -40,13 +40,13 @@ export default function ServicesPage() {
     {
       icon: UserCheck,
       title: "Doctor Recommendation",
-      description: "Get personalized doctor suggestions based on your symptoms and medical history.",
+      description: "Find the right doctor based on your specialty needs and location.",
       features: [
-        "AI-powered matching system",
-        "Specialist recommendations",
-        "Patient reviews & ratings",
+        "Search by specialization",
+        "Verified doctor profiles",
         "Experience and qualification details",
-        "Location-based search"
+        "Location-based search",
+        "Consultation fee transparency"
       ],
       color: "green"
     },
@@ -334,13 +334,6 @@ export default function ServicesPage() {
                     className="bg-white text-cyan-600 hover:bg-cyan-50 px-8 py-6 text-lg"
                   >
                     Create Account
-                  </Button>
-                  <Button
-                    onClick={() => handleNavigation('/contact')}
-                    variant="outline"
-                    className="border-2 border-white text-white hover:bg-white/10 px-8 py-6 text-lg"
-                  >
-                    Contact Us
                   </Button>
                 </div>
               </CardContent>
